@@ -13,6 +13,7 @@ from google.appengine.ext.webapp.util import run_wsgi_app
 import logging
 from google.appengine.api import memcache
 from google.appengine.runtime import DeadlineExceededError
+from gaeworkers.worker import _TASK_HEADER_INVOCATION
 
 
 _WORKER_MEMCACHE_KEY = "worker://%(id)s"
@@ -59,7 +60,9 @@ class WorkerHandler(webapp.RequestHandler):
         @param id: ID of the worker; used to obtain worker state (if any)
         @param class_obj: Worker class
         '''
-        worker = class_obj()
+        worker_name = self.request.headers['X-AppEngine-TaskName']
+        worker = class_obj(worker_name)
+        worker._id = id
         
         mc_key = _WORKER_MEMCACHE_KEY % {'id':id}
         worker_data = memcache.get(mc_key, namespace = config.MEMCACHE_NAMESPACE) #@UndefinedVariable
@@ -69,11 +72,19 @@ class WorkerHandler(webapp.RequestHandler):
             pass
         
         if first_run:   worker.setup()
-        
+
         try:
             worker.run()
         except DeadlineExceededError:
-            pass
+            logging.warning('[gae-workers] Task deadline exceeded for worker %s', worker._name)
+            
+            # enqueue further execution
+            queue_name = self.request.headers['X-AppEngine-QueueName']
+            invocation = self.request.headers.get(_TASK_HEADER_INVOCATION, 1)
+            task = worker._create_task(invocation + 1)
+            task.add(queue_name)
+            
+        # TODO: save worker data to memcache
 
 
 worker_app = webapp.WSGIApplication([

@@ -33,6 +33,25 @@ class Worker(object):
         If it is, super() shall be called. '''
         self._name = name
         
+    def _create_task(self, invocation = 1):
+        '''
+        Creates a Task object for this worker.
+        This method is used internally by the gae-workers library.
+        '''
+        # construct URL for the worker task
+        qs_args = {}
+        qs_args['class'] = "%s.%s" % (self.__class__.__module__, self.__class__.__name__)
+        qs_args['id'] = self._id
+        task_qs = urllib.urlencode(qs_args)
+        task_url = "%s?%s" % (config.WORKER_URL, task_qs)
+        
+        headers = {
+                   _TASK_HEADER_INVOCATION: invocation,
+                   }
+        return Task(name = self._name or self._id,
+                    url = task_url, method = 'GET', headers = headers)
+    
+        
     def setup(self):
         '''
         Performs one-time initialization of the worker.
@@ -56,25 +75,12 @@ class Worker(object):
                       By default, name defined in config.QUEUE_NAME ('__gae-workers')
                       is used.
         '''
-        worker_id = getattr(self, '_id', None)
-        if worker_id:   raise InvalidWorkerState('Worker is already running')
+        if getattr(self, '_id', None):
+            raise InvalidWorkerState('Worker is already running')
+        self._id = _generate_worker_id()
         
-        worker_id = _generate_worker_id()
-        self._id = worker_id
-        
-        # construct URL for the worker task
-        qs_args = {}
-        qs_args['class'] = "%s.%s" % (self.__class__.__module__, self.__class__.__name__)
-        qs_args['id'] = worker_id
-        task_qs = urllib.urlencode(qs_args)
-        task_url = "%s?%s" % (config.WORKER_URL, task_qs)
-        
-        # enqueue the task
-        headers = {
-                   _TASK_HEADER_INVOCATION: 1,
-                   }
-        task = Task(url = task_url, method = 'GET', headers = headers)
-        task.add(queue_name = queue_name or config.QUEUE_NAME)
+        task = self._create_task()
+        task.add(queue_name or config.QUEUE_NAME)
         
 
 def _generate_worker_id():

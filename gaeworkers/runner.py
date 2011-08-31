@@ -11,7 +11,11 @@ from . import config
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import run_wsgi_app
 import logging
+from google.appengine.api import memcache
+from google.appengine.runtime import DeadlineExceededError
 
+
+_WORKER_MEMCACHE_KEY = "worker://%(id)s"
 
 class WorkerHandler(webapp.RequestHandler):
     '''
@@ -46,11 +50,30 @@ class WorkerHandler(webapp.RequestHandler):
             return
         logging.debug('[gae-workers] Worker class %s imported successfully', worker_class_name)
         
-        self.execute_worker(worker_class)
+        self.execute_worker(worker_id, worker_class)
         
         
-    def execute_worker(self, worker_class):
-        pass
+    def execute_worker(self, id, class_obj):
+        '''
+        Commences execution of given worker.
+        @param id: ID of the worker; used to obtain worker state (if any)
+        @param class_obj: Worker class
+        '''
+        worker = class_obj()
+        
+        mc_key = _WORKER_MEMCACHE_KEY % {'id':id}
+        worker_data = memcache.get(mc_key, namespace = config.MEMCACHE_NAMESPACE) #@UndefinedVariable
+        if not worker_data: first_run = True
+        else:
+            # TODO: restore worker data from memcache
+            pass
+        
+        if first_run:   worker.setup()
+        
+        try:
+            worker.run()
+        except DeadlineExceededError:
+            pass
 
 
 worker_app = webapp.WSGIApplication([

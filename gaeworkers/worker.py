@@ -20,14 +20,14 @@ class InvalidWorkerState(Exception):
     def __str__(self):
         return self.msg
         
+        
+_TASK_HEADERS_PREFIX = 'X-GAEWorkers-'
+_TASK_HEADER_INVOCATION = _TASK_HEADERS_PREFIX + 'Invocation'
 
 class Worker(object):
     '''
     Base class for worker objects.
     '''
-    TASK_HEADERS_PREFIX = 'X-GAEWorkers-'
-    TASK_HEADER_INVOCATION = TASK_HEADERS_PREFIX + 'Invocation'
-    
     def __init__(self, name = None):
         ''' Constructor. In most cases it doesn't need to be overidden.
         If it is, super() shall be called. '''
@@ -71,7 +71,7 @@ class Worker(object):
         
         # enqueue the task
         headers = {
-                   self.TASK_HEADER_INVOCATION: 1,
+                   _TASK_HEADER_INVOCATION: 1,
                    }
         task = Task(url = task_url, method = 'GET', headers = headers)
         task.add(queue_name = queue_name or config.QUEUE_NAME)

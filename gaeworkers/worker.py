@@ -28,10 +28,15 @@ class Worker(object):
     '''
     Base class for worker objects.
     '''
-    def __init__(self, name = None):
-        ''' Constructor. In most cases it doesn't need to be overidden.
-        If it is, super() shall be called. '''
+    queue_name = config.QUEUE_NAME
+    
+    def __init__(self, name = None, id = None):
+        '''
+        Constructor. In most cases it doesn't need to be overidden.
+        If it is, super() shall be called.
+        '''
         self._name = name
+        self._id = id
         
     def _create_task(self, invocation = 1):
         '''
@@ -68,19 +73,17 @@ class Worker(object):
         logging.warning("[gae-workers] Empty Worker.run() method invoked")
 
 
-    def start(self, queue_name = None):
+    def start(self):
         '''
         Starts the worker by queuing a task that will commence its execution.
-        @param queue: Name of the taskqueue this worker should be put in.
-                      By default, name defined in config.QUEUE_NAME ('__gae-workers')
-                      is used.
         '''
         if getattr(self, '_id', None):
             raise InvalidWorkerState('Worker is already running')
         self._id = _generate_worker_id()
         
         task = self._create_task()
-        task.add(queue_name or config.QUEUE_NAME)
+        task.add(self.queue_name or config.QUEUE_NAME)
+        
         
 
 def _generate_worker_id():

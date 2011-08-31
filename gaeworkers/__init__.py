@@ -7,3 +7,4 @@ using task queue for code execution and memcache for preserving state.
 @license: MIT
 @since: 2011-08-30
 '''
+from worker import Worker

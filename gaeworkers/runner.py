@@ -8,12 +8,13 @@ Created on 2011-08-31
 @author: xion
 '''
 from . import config
+from gaeworkers.worker import _TASK_HEADER_INVOCATION
+from google.appengine.api import memcache
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import run_wsgi_app
-import logging
-from google.appengine.api import memcache
 from google.appengine.runtime import DeadlineExceededError
-from gaeworkers.worker import _TASK_HEADER_INVOCATION
+import inspect
+import logging
 
 
 _WORKER_MEMCACHE_KEY = "worker://%(id)s"
@@ -61,20 +62,31 @@ class WorkerHandler(webapp.RequestHandler):
         @param class_obj: Worker class
         '''
         worker_name = self.request.headers['X-AppEngine-TaskName']
-        worker = class_obj(worker_name)
-        worker._id = id
+        worker = class_obj(worker_name, id)
         
         mc_key = _WORKER_MEMCACHE_KEY % {'id':id}
         worker_data = memcache.get(mc_key, namespace = config.MEMCACHE_NAMESPACE) #@UndefinedVariable
         if not worker_data: first_run = True
         else:
             # TODO: restore worker data from memcache
-            pass
+            first_run = False
         
         if first_run:   worker.setup()
 
         try:
-            worker.run()
+            if not inspect.isgeneratorfunction(worker.run):
+                logging.warning("[gae-workers] Worker's run() is not a generator function")
+                worker.run()
+            else:
+                # TODO: measure the time of each iteration to estimate
+                # the remaining time for the request and save worker data
+                # in memcache deadline looms
+                worker_run = worker.run()
+                try:
+                    while True:
+                        worker_run.next()
+                except StopIteration:
+                    pass
         except DeadlineExceededError:
             logging.warning('[gae-workers] Task deadline exceeded for worker %s', worker._name)
             

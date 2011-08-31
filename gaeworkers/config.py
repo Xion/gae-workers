@@ -11,7 +11,12 @@ Created on 2011-08-31
 WORKER_URL = '/_ah/worker'
 
 
+# Name of the taskqueue where worker tasks are being put in.
+# You can use it to customize the processing rate and/or other params in queue.yaml.
+# You don't generally need to change it.
+QUEUE_NAME = '__gae-workers'
+
 # Namespace which will be used by gae-workers to persist information
 # about workers and their data.
 # You don't generally need to change this.
-MEMCACHE_NAMESPACE = '__gae-workers'
+MEMCACHE_NAMESPACE = 'gae-workers'

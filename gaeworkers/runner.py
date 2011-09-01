@@ -65,14 +65,10 @@ class WorkerHandler(webapp.RequestHandler):
         worker_name = self.request.headers['X-AppEngine-TaskName']
         worker = class_obj(worker_name, id)
         
-        mc_key = _WORKER_MEMCACHE_KEY % {'id':id}
-        worker_data = memcache.get(mc_key, namespace = config.MEMCACHE_NAMESPACE) #@UndefinedVariable
-        if not worker_data: first_run = True
-        else:
-            # TODO: restore worker data from memcache
-            first_run = False
-        
-        if first_run:   worker.setup()
+        self.restore_worker_state(worker)
+        if not worker._first_run:
+            logging.debug("[gae-workers] Initializing state of worker '%s'", worker._name)
+            worker.setup()
 
         try:
             if not inspect.isgeneratorfunction(worker.run):
@@ -83,14 +79,13 @@ class WorkerHandler(webapp.RequestHandler):
                 self.run_worker(worker)
         except DeadlineExceededError:
             logging.warning('[gae-workers] Task deadline exceeded for worker %s', worker._name)
+            self.save_worker_state(worker)
             
             # enqueue further execution
             queue_name = self.request.headers['X-AppEngine-QueueName']
             invocation = self.request.headers.get(_TASK_HEADER_INVOCATION, 1)
             task = worker._create_task(invocation + 1)
             task.add(queue_name)
-            
-        # TODO: save worker data to memcache
         
     def run_worker(self, worker):
         '''
@@ -117,8 +112,42 @@ class WorkerHandler(webapp.RequestHandler):
                 estimated_time_left -= spin_duration
             except StopIteration:
                 logging.info("[gae-workers] '%s' finished", worker._name)
+                
+        self.save_worker_state(worker)
+                
+                
+    def save_worker_state(self, worker):
+        '''
+        Saves the worker state in memcache in order to retrieve it later,
+        in subsequent tasks dedicated to run this worker.
+        @param worker: Worker object whose state is to be saved
+        '''
+        state = {}
+        for attr, value in worker.__dict__.iteritems():
+            if attr.startswith('_'):    continue
+            state[attr] = repr(value) # you have to start somewhere :)
+            
+        mc_key = _WORKER_MEMCACHE_KEY % {'id': worker._id}
+        if not memcache.set(mc_key, state, namespace = config.MEMCACHE_NAMESPACE): #@UndefinedVariable
+            logging.error("[gae-workers] Failed to save state for worker '%s' (ID=%s)",
+                          worker._name, worker._id)
+            
+    def restore_worker_state(self, worker):
+        '''
+        Loads the worker state from memcache if it was saved previously.
+        @param worker: Worker object whose state is to be restored 
+        '''
+        mc_key = _WORKER_MEMCACHE_KEY % {'id': worker._id}
+        state = memcache.get(mc_key, namespace = config.MEMCACHE_NAMESPACE) #@UndefinedVariable
+        if state is None:
+            worker._first_run = True
+            return
+        
+        for attr, value in state.iteritems():
+            setattr(worker, attr, value)
+        worker._first_run = False
 
-
+                
 worker_app = webapp.WSGIApplication([
                                      (config.WORKER_URL, WorkerHandler),
                                     ])

@@ -13,6 +13,7 @@ from google.appengine.api import memcache
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import run_wsgi_app
 from google.appengine.runtime import DeadlineExceededError
+from time import time
 import inspect
 import logging
 
@@ -78,15 +79,8 @@ class WorkerHandler(webapp.RequestHandler):
                 logging.warning("[gae-workers] Worker's run() is not a generator function")
                 worker.run()
             else:
-                # TODO: measure the time of each iteration to estimate
-                # the remaining time for the request and save worker data
-                # in memcache deadline looms
-                worker_run = worker.run()
-                try:
-                    while True:
-                        worker_run.next()
-                except StopIteration:
-                    pass
+                logging.debug("[gae-worker] Running worker '%s'", worker._name)
+                self.run_worker(worker)
         except DeadlineExceededError:
             logging.warning('[gae-workers] Task deadline exceeded for worker %s', worker._name)
             
@@ -97,6 +91,32 @@ class WorkerHandler(webapp.RequestHandler):
             task.add(queue_name)
             
         # TODO: save worker data to memcache
+        
+    def run_worker(self, worker):
+        '''
+        Spins worker run() method, allowing its code to execute while measuring
+        the time it takes and estimating the remaining time until deadline.
+        This is the main method of the workers' runner.
+        @param worker: Worker object to run. Its run() method shall be a generator function.
+        '''
+        worker_run = worker.run()
+        
+        estimated_time_left = config.DEADLINE_SECONDS - config.SAFETY_MARGIN
+        current_time = time()
+        while estimated_time_left > 0:
+            try:
+                worker_run.next()
+                
+                spin_finish_time = time()
+                spin_duration = spin_finish_time - current_time
+                current_time = spin_finish_time # intentionally including our own control code in measurement
+                
+                # TODO: save worker data in memcache if time since last save is long enough
+                # or the deadline is close -- among other things
+                
+                estimated_time_left -= spin_duration
+            except StopIteration:
+                logging.info("[gae-workers] '%s' finished", worker._name)
 
 
 worker_app = webapp.WSGIApplication([

@@ -7,13 +7,13 @@ Created on 2011-08-31
 
 @author: xion
 '''
-from . import config
-from gaeworkers.worker import _TASK_HEADER_INVOCATION
+from . import config, data
 from google.appengine.api import memcache
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import run_wsgi_app
 from google.appengine.runtime import DeadlineExceededError
 from time import time
+from worker import _TASK_HEADER_INVOCATION
 import inspect
 import logging
 
@@ -43,7 +43,7 @@ class WorkerHandler(webapp.RequestHandler):
         
         # attempt to import the worker class
         try:
-            worker_module, class_name = worker_class_name.rsplit('.')
+            worker_module, class_name = worker_class_name.rsplit('.', 1)
             worker_class = __import__(worker_module, globals(), locals(), fromlist = [class_name])
         except ValueError:
             logging.error('[gae-workers] Invalid worker class name (%s)', worker_class_name)
@@ -125,7 +125,10 @@ class WorkerHandler(webapp.RequestHandler):
         state = {}
         for attr, value in worker.__dict__.iteritems():
             if attr.startswith('_'):    continue
-            state[attr] = repr(value) # you have to start somewhere :)
+            try:
+                state[attr] = data.save_value(value)
+            except data.DataError, e:
+                logging.error("[gae-workers] Error while saving %s: %s", attr, e)
             
         mc_key = _WORKER_MEMCACHE_KEY % {'id': worker._id}
         if not memcache.set(mc_key, state, namespace = config.MEMCACHE_NAMESPACE): #@UndefinedVariable
@@ -144,14 +147,18 @@ class WorkerHandler(webapp.RequestHandler):
             return
         
         for attr, value in state.iteritems():
-            setattr(worker, attr, value)
-        worker._first_run = False
-
+            try:
+                value = data.restore_value(value)
+                setattr(worker, attr, value)
+            except data.DataError, e:
+                logging.error("[gae-workers] Error while restoring %s: %s", attr, e)
                 
-worker_app = webapp.WSGIApplication([
-                                     (config.WORKER_URL, WorkerHandler),
-                                    ])
-
-
+        worker._first_run = False
+        
+        
+        
 if __name__ == '__main__':
+    worker_app = webapp.WSGIApplication([
+                                         (config.WORKER_URL, WorkerHandler),
+                                        ])
     run_wsgi_app(worker_app)

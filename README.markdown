@@ -20,19 +20,19 @@ and memcache (for preserving the state of workers).
 
 Installation
 -
-Once downloaded, include the library with your App Engine application. Once there, you shall add a
-handler to *app.yaml* that will route the workers' tasks to the *runner.py* script intended to handle them:
+Once downloaded, include the library with your App Engine application. You should also add an entry
+to *app.yaml* that will make workers' tasks go to the *runner.py* script intended to handle them:
 
     handlers:
-       - url: /_ah/worker
-         script: gaeworkers/runner.py
+    - url: /_ah/worker
+      script: gaeworkers/runner.py
 
 If you want, you can change the URL (among other parameters) by editing the *config.py* file. 
 
 
 Usage
 -
-*Note*: Examples below assume that 'gaeworkers' are in your app's root directory.
+*Note*: Examples below assume that 'gaeworkers' directory is in your app's root directory.
 
 Using a worker is quite similar to working with the Python standard <code>threading.Thread</code> class.
 In general, you define a class inheriting from <code>gaeworkers.Worker</code> and implement
@@ -55,11 +55,11 @@ There are few things to bear in mind though:
     and estimate whether a deadline is looming and work shall be delegated to next task.
     Without the <code>yield</code>ing, all code in <code>run()</code> has to be executed in one go; Python
     does not allow preempting.
-  * State of worker object is preserved between queued tasks used for executing worker's code. Therefore any
+  * State of worker object is preserved between queued tasks that are used for executing worker's code. Therefore any
     non-volatile data shall be stored in <code>self</code>'s attributes.
   * <code>run()</code> is invoked "from the beginning" for every task spawned to handle the worker. Hence it is
-    not a good place to have any sort of initialization. For that, implement the <code>setup()</code> - it is
-    run only once at the beginning.
+    not a good place to have any sort of initialization. For that, implement the <code>setup()</code> method - it is
+    ran only once at the beginning.
 
 Starting a worker is straightforward:
 

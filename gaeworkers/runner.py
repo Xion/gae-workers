@@ -96,7 +96,12 @@ class WorkerHandler(webapp.RequestHandler):
         '''
         worker_run = worker.run()
         
+        # initialize measurement/statistical variables
         estimated_time_left = config.DEADLINE_SECONDS - config.SAFETY_MARGIN
+        total_running_time = 0
+        spins_count = 0
+        max_spin_time = max_running_average = 0
+        
         current_time = time()
         while estimated_time_left > 0:
             try:
@@ -105,11 +110,19 @@ class WorkerHandler(webapp.RequestHandler):
                 spin_finish_time = time()
                 spin_duration = spin_finish_time - current_time
                 current_time = spin_finish_time # intentionally including our own control code in measurement
+                total_running_time += spin_duration
+                spins_count += 1
                 
-                # TODO: save worker data in memcache if time since last save is long enough
-                # or the deadline is close -- among other things
+                # update statistics
+                max_spin_time = max(max_spin_time, spin_duration)
+                running_average = total_running_time / float(spins_count)
+                max_running_average = max(max_running_average, running_average)
                 
-                estimated_time_left -= spin_duration
+                # if we don't seem to manage to squeeze in another spin, we finish this task
+                if estimated_time_left - (max_running_average + config.SAFETY_MARGIN) <= 0:
+                    estimated_time_left = 0 
+                else:
+                    estimated_time_left -= spin_duration
             except StopIteration:
                 logging.info("[gae-workers] '%s' finished", worker._name)
                 

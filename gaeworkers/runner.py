@@ -74,18 +74,22 @@ class WorkerHandler(webapp.RequestHandler):
             if not inspect.isgeneratorfunction(worker.run):
                 logging.warning("[gae-workers] Worker's run() is not a generator function")
                 worker.run()
+                finished = True
             else:
                 logging.debug("[gae-worker] Running worker '%s'", worker._name)
-                self.run_worker(worker)
+                finished = self.run_worker(worker)
         except DeadlineExceededError:
             logging.warning('[gae-workers] Task deadline exceeded for worker %s', worker._name)
             self.save_worker_state(worker)
+            finished = False
             
-            # enqueue further execution
+        if not finished:        # enqueue further execution
             queue_name = self.request.headers['X-AppEngine-QueueName']
             invocation = self.request.headers.get(_TASK_HEADER_INVOCATION, 1)
             task = worker._create_task(invocation + 1)
             task.add(queue_name)
+            logging.debug("[gae-workers] Worker '%s' (ID=%s) enqueued for further execution",
+                          worker._name, worker._id)
         
     def run_worker(self, worker):
         '''
@@ -93,11 +97,13 @@ class WorkerHandler(webapp.RequestHandler):
         the time it takes and estimating the remaining time until deadline.
         This is the main method of the workers' runner.
         @param worker: Worker object to run. Its run() method shall be a generator function.
+        @return: Whether the worker has finished its work
         '''
         worker_run = worker.run()
+        finished = False
         
         # initialize measurement/statistical variables
-        estimated_time_left = config.DEADLINE_SECONDS - config.SAFETY_MARGIN
+        estimated_time_left = config.DEADLINE_SECONDS
         total_running_time = 0
         spins_count = 0
         max_spin_time = max_running_average = 0
@@ -120,13 +126,17 @@ class WorkerHandler(webapp.RequestHandler):
                 
                 # if we don't seem to manage to squeeze in another spin, we finish this task
                 if estimated_time_left - (max_running_average + config.SAFETY_MARGIN) <= 0:
-                    estimated_time_left = 0 
-                else:
-                    estimated_time_left -= spin_duration
+                    break
+                
+                estimated_time_left -= spin_duration
             except StopIteration:
                 logging.info("[gae-workers] '%s' finished", worker._name)
-                
-        self.save_worker_state(worker)
+                finished = True
+                break
+        
+        if not finished:        
+            self.save_worker_state(worker)
+        return finished
                 
                 
     def save_worker_state(self, worker):

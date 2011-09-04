@@ -34,3 +34,9 @@ MEMCACHE_NAMESPACE = 'gae-workers'
 # Currently, it is 10 minutes.
 # You shouldn't need to modify this unless the deadline limit is changed in GAE. 
 DEADLINE_SECONDS = 10 * 60
+
+
+# Minimum amount of seconds workers can SLEEP.
+# Internal shorten than that is considered to be not enforceable anyway,
+# as the sheer act of deferring the execution to next task is likely to take longer.
+MIN_SLEEP_SECONDS = 5

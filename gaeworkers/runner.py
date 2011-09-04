@@ -8,6 +8,7 @@ Created on 2011-08-31
 @author: xion
 '''
 from . import config, data
+from datetime import datetime, timedelta
 from google.appengine.api import memcache
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import run_wsgi_app
@@ -83,13 +84,8 @@ class WorkerHandler(webapp.RequestHandler):
             self.save_worker_state(worker)
             finished = False
             
-        if not finished:        # enqueue further execution
-            queue_name = self.request.headers['X-AppEngine-QueueName']
-            invocation = self.request.headers.get(_TASK_HEADER_INVOCATION, 1)
-            task = worker._create_task(invocation + 1)
-            task.add(queue_name)
-            logging.debug("[gae-workers] Worker '%s' (ID=%s) enqueued for further execution",
-                          worker._name, worker._id)
+        if not finished:
+            self.schedule_worker_execution(worker)            
         
     def run_worker(self, worker):
         '''
@@ -97,7 +93,7 @@ class WorkerHandler(webapp.RequestHandler):
         the time it takes and estimating the remaining time until deadline.
         This is the main method of the workers' runner.
         @param worker: Worker object to run. Its run() method shall be a generator function.
-        @return: Whether the worker has finished its work
+        @return: Whether worker's execution shall be continued
         '''
         worker_run = worker.run()
         finished = False
@@ -111,7 +107,25 @@ class WorkerHandler(webapp.RequestHandler):
         current_time = time()
         while estimated_time_left > 0:
             try:
-                worker_run.next()
+                # invoke the next iteration and see whether it ended with an "API" call
+                api_call = worker_run.next()
+                if api_call:
+                    try:
+                        api_name, api_params = api_call
+                    except ValueError:
+                        logging.warning("[gae-workers] Invalid API call coming from worker %s (ID=%s): %s",
+                                        worker._name, worker._id, api_call)
+                    else:
+                        # perform appropriate action
+                        if api_name == 'sleep':
+                            secs = api_params[0]
+                            if secs < config.MIN_SLEEP_SECONDS:
+                                logging.warning("[gae-workers] Worker %s (ID=%s) tried to sleep for % seconds -- that's too short",
+                                                worker._name, worker._id, secs)
+                            else:
+                                self.save_worker_state(worker)
+                                self.schedule_worker_execution(worker, delay = timedelta(seconds = secs))
+                                return True # act as if worker finished to prevent double-queuing
                 
                 spin_finish_time = time()
                 spin_duration = spin_finish_time - current_time
@@ -137,7 +151,21 @@ class WorkerHandler(webapp.RequestHandler):
         if not finished:        
             self.save_worker_state(worker)
         return finished
-                
+    
+    def schedule_worker_execution(self, worker, delay = None):
+        '''
+        Queues up a next task that is to carry on execution of specified worker.
+        @param delay: Whether the task should be delayed (timedelta object or None) 
+        '''
+        queue_name = self.request.headers['X-AppEngine-QueueName']
+        invocation = self.request.headers.get(_TASK_HEADER_INVOCATION, 1)
+        eta = datetime.now() + delay if delay else None
+        
+        task = worker._create_task(invocation + 1, eta)
+        task.add(queue_name)
+        logging.debug("[gae-workers] Worker '%s' (ID=%s) enqueued for further execution",
+                      worker._name, worker._id)
+        
                 
     def save_worker_state(self, worker):
         '''

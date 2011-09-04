@@ -30,6 +30,9 @@ class Worker(object):
     '''
     queue_name = config.QUEUE_NAME
     
+    # API "calls" available to workers
+    SLEEP = lambda secs: ("sleep", (secs,))
+    
     def __init__(self, name = None, id = None):
         '''
         Constructor. In most cases it doesn't need to be overidden.
@@ -38,10 +41,12 @@ class Worker(object):
         self._name = name
         self._id = id
         
-    def _create_task(self, invocation = 1):
+    def _create_task(self, invocation = 1, eta = None):
         '''
         Creates a Task object for this worker.
         This method is used internally by the gae-workers library.
+        @param invocation: Invocation count for this worker, passed as header
+        @param eta: ETA (earliest execution time) for the task
         '''
         # construct URL for the worker task
         qs_args = {}
@@ -54,7 +59,8 @@ class Worker(object):
                    _TASK_HEADER_INVOCATION: invocation,
                    }
         return Task(name = self._name or self._id,
-                    url = task_url, method = 'GET', headers = headers)
+                    url = task_url, method = 'GET', headers = headers,
+                    eta = eta)
     
         
     def setup(self):

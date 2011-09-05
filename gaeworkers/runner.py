@@ -44,16 +44,20 @@ class WorkerHandler(webapp.RequestHandler):
         
         # attempt to import the worker class
         try:
-            worker_module, class_name = worker_class_name.rsplit('.', 1)
-            worker_class = __import__(worker_module, globals(), locals(), fromlist = [class_name])
+            module_name, class_name = worker_class_name.rsplit('.', 1)
+            worker_module = __import__(module_name, globals(), locals(), fromlist = [class_name])
+            worker_class = getattr(worker_module, class_name)
         except ValueError:
             logging.error('[gae-workers] Invalid worker class name (%s)', worker_class_name)
             return
         except ImportError:
-            logging.error('[gae-workers] Failed to import worker class (%s)', worker_class_name)
+            logging.error("[gae-workers] Failed to import worker class' module (%s)", module_name)
             return
+        except AttributeError:
+            logging.error('[gae-workers] Module %s does not contain worker class %s', module_name, class_name)
+            return    
         logging.debug('[gae-workers] Worker class %s imported successfully', worker_class_name)
-        
+    
         self.execute_worker(worker_id, worker_class)
         
         

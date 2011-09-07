@@ -116,21 +116,16 @@ class WorkerHandler(webapp.RequestHandler):
                 if api_call:
                     try:
                         api_name, api_params = api_call
+                        api_result, runner_action = self.invoke_api(worker, api_name, *api_params)
+                        
+                        if api_result:  worker.send(api_result)
+                        if runner_action == "proceed":  pass
+                        elif runner_action == "defer":  return False
+                        elif runner_action == "terminate":  return True # pretend worker has finished                        
                     except ValueError:
                         logging.warning("[gae-workers] Invalid API call coming from worker %s (ID=%s): %s",
                                         worker._name, worker._id, api_call)
-                    else:
-                        # perform appropriate action
-                        if api_name == 'sleep':
-                            secs = api_params[0]
-                            if secs < config.MIN_SLEEP_SECONDS:
-                                logging.warning("[gae-workers] Worker %s (ID=%s) tried to sleep for % seconds -- that's too short",
-                                                worker._name, worker._id, secs)
-                            else:
-                                self.save_worker_state(worker, lifetime = secs)
-                                self.schedule_worker_execution(worker, delay = timedelta(seconds = secs))
-                                return True # act as if worker finished to prevent double-queuing
-                
+                        
                 spin_finish_time = time()
                 spin_duration = spin_finish_time - current_time
                 current_time = spin_finish_time # intentionally including our own control code in measurement
@@ -170,6 +165,35 @@ class WorkerHandler(webapp.RequestHandler):
         logging.debug("[gae-workers] Worker '%s' (ID=%s) enqueued for further execution",
                       worker._name, worker._id)
         
+        
+    def invoke_api(self, worker, api_name, *args):
+        '''
+        Performs an "API" call which was requested by a worker via yielding.
+        The exact action depends on the type of call.
+        @param worker: Worker that issued the call
+        @param api_name: "API function" name
+        @return: Pair: (api_result, runner_action), where the latter can be:
+                 - proceed - runner shall proceed normally
+                 - defer - runner shall finish after delegating worker to next task
+                 - terminate -runner shall terminate completely
+        '''
+        if not api_name:    return None, "proceed"
+        api_name = api_name.lower()
+        
+        if api_name == 'sleep':
+            secs = args[0]
+            if secs < config.MIN_SLEEP_SECONDS:
+                logging.warning("[gae-workers] Worker %s (ID=%s) tried to sleep for % seconds -- that's too short",
+                                worker._name, worker._id, secs)
+            else:
+                self.save_worker_state(worker, lifetime = secs)
+                self.schedule_worker_execution(worker, delay = timedelta(seconds = secs))
+                return "terminate"  # we pretend worker has finished since we queue its next ask above
+        else:
+            logging.error("[gae-workers] Unknown API call: %s", api_name)
+            
+        return None, "proceed"
+    
                 
     def save_worker_state(self, worker, lifetime = None):
         '''

@@ -71,6 +71,8 @@ def restore_value(saved_value):
     # TODO: make it more intelligent, like a mapping of (de)serializer classes
     if issubclass(class_, db.Model):
         value = db.model_to_protobuf(value_repr)
+    elif class_ in [list, dict] or issubclass(class_, basestring):
+        value = eval(value_repr)
     else:
         value = class_(value_repr)
 

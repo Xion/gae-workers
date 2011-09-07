@@ -25,15 +25,22 @@ SAFETY_MARGIN = 5
 # You don't generally need to change it.
 QUEUE_NAME = '__gae-workers'
 
+# A total amount of seconds request is allowed to be ran on App Engine.
+# Currently, it is 10 minutes.
+# You shouldn't need to modify this unless the deadline limit is changed in GAE. 
+DEADLINE_SECONDS = 10 * 60
+
+
 # Namespace which will be used by gae-workers to persist information
 # about workers and their data.
 # You don't generally need to change this.
 MEMCACHE_NAMESPACE = 'gae-workers'
 
-# A total amount of seconds request is allowed to be ran on App Engine.
-# Currently, it is 10 minutes.
-# You shouldn't need to modify this unless the deadline limit is changed in GAE. 
-DEADLINE_SECONDS = 10 * 60
+# How long the worker's state will kept in memcache. The time should be long enough
+# for a copy of worker's state to always be present in the memcache, if the worker
+# is running. It should, however, expire shortly after worker has finished.
+# You don't generally need to change this.
+MEMCACHE_DATA_LIFETIME = int(0.9 * DEADLINE_SECONDS)
 
 
 # Minimum amount of seconds workers can SLEEP.

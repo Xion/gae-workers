@@ -127,7 +127,7 @@ class WorkerHandler(webapp.RequestHandler):
                                 logging.warning("[gae-workers] Worker %s (ID=%s) tried to sleep for % seconds -- that's too short",
                                                 worker._name, worker._id, secs)
                             else:
-                                self.save_worker_state(worker)
+                                self.save_worker_state(worker, lifetime = secs)
                                 self.schedule_worker_execution(worker, delay = timedelta(seconds = secs))
                                 return True # act as if worker finished to prevent double-queuing
                 
@@ -171,12 +171,17 @@ class WorkerHandler(webapp.RequestHandler):
                       worker._name, worker._id)
         
                 
-    def save_worker_state(self, worker):
+    def save_worker_state(self, worker, lifetime = None):
         '''
         Saves the worker state in memcache in order to retrieve it later,
         in subsequent tasks dedicated to run this worker.
         @param worker: Worker object whose state is to be saved
+        @param lifetime: How long the state shall be kept in memcache.
         '''
+        if not lifetime and lifetime < config.MEMCACHE_DATA_LIFETIME:
+            lifetime = config.MEMCACHE_DATA_LIFETIME
+        
+        # dump worker state into dictionary
         state = {}
         for attr, value in worker.__dict__.iteritems():
             if attr.startswith('_'):    continue
@@ -186,7 +191,7 @@ class WorkerHandler(webapp.RequestHandler):
                 logging.error("[gae-workers] Error while saving %s: %s", attr, e)
             
         mc_key = _WORKER_MEMCACHE_KEY % {'id': worker._id}
-        if not memcache.set(mc_key, state, namespace = config.MEMCACHE_NAMESPACE): #@UndefinedVariable
+        if not memcache.set(mc_key, state, lifetime, namespace = config.MEMCACHE_NAMESPACE): #@UndefinedVariable
             logging.error("[gae-workers] Failed to save state for worker '%s' (ID=%s)",
                           worker._name, worker._id)
             

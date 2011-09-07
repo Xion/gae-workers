@@ -5,7 +5,8 @@ Created on 2011-08-31
 
 @author: Xion
 '''
-from . import config
+from . import config, data
+from google.appengine.api import memcache
 from google.appengine.api.taskqueue import Task
 import hashlib
 import logging
@@ -24,6 +25,8 @@ class InvalidWorkerState(Exception):
 _TASK_HEADERS_PREFIX = 'X-GAEWorkers-'
 _TASK_HEADER_INVOCATION = _TASK_HEADERS_PREFIX + 'Invocation'
 
+_WORKER_MESSAGES_MEMCACHE_KEY = "worker://%(id)s/messages"
+
 class Worker(object):
     '''
     Base class for worker objects.
@@ -32,6 +35,7 @@ class Worker(object):
     
     # API "calls" available to workers
     SLEEP = lambda secs: ("sleep", (secs,))
+    GET_MESSAGES = lambda: ("get_messages", ())
     
     def __init__(self, name = None, id = None):
         '''
@@ -90,7 +94,29 @@ class Worker(object):
         task = self._create_task()
         task.add(self.queue_name or config.QUEUE_NAME)
         
+    
+    def post_message(self, msg):
+        '''
+        Posts a message to worker of given ID. Worker will receive it
+        the when calling Worker.GET_MESSAGES routine.
+        @param msg: Message to pass to worker. This can be any object,
+                    although simple Python types are recommended.
+        @return: Whether the message was posted (this doesn't mean it was processed!)
+        '''
+        id = getattr(self, '_id', None)
+        if not id:  raise InvalidWorkerState('Worker object has not been initialized')
         
+        mc_key = _WORKER_MESSAGES_MEMCACHE_KEY % {'id':id}
+        msg_queue = memcache.get(mc_key, namespace = config.MEMCACHE_NAMESPACE) #@UndefinedVariable
+        msg_queue = msg_queue or []
+        
+        msg_queue.append(data.save_value(msg))
+        if not memcache.set(mc_key, messages, namespace = config.MEMCACHE_NAMESPACE): #@UndefinedVariable
+            logging.error("[gae-workers] Could not post message -- possible overflow of message queue")
+            return False
+        
+        return True
+                
 
 def _generate_worker_id():
     '''

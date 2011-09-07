@@ -14,12 +14,12 @@ from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import run_wsgi_app
 from google.appengine.runtime import DeadlineExceededError
 from time import time
-from worker import _TASK_HEADER_INVOCATION
+from worker import _TASK_HEADER_INVOCATION, _WORKER_MESSAGES_MEMCACHE_KEY
 import inspect
 import logging
 
 
-_WORKER_MEMCACHE_KEY = "worker://%(id)s"
+_WORKER_STATE_MEMCACHE_KEY = "worker://%(id)s/state"
 
 class WorkerHandler(webapp.RequestHandler):
     '''
@@ -27,6 +27,8 @@ class WorkerHandler(webapp.RequestHandler):
     and controls the execution of a single worker, preserving and
     restoring its state as necessary.
     '''
+    NULL = object() # special result of "API" call, indicating no result
+    
     def get(self):
         '''
         GET handler, invoked by GAE as a task.
@@ -118,7 +120,10 @@ class WorkerHandler(webapp.RequestHandler):
                         api_name, api_params = api_call
                         api_result, runner_action = self.invoke_api(worker, api_name, *api_params)
                         
-                        if api_result:  worker.send(api_result)
+                        if api_result is not self.NULL:
+                            worker.send(api_result)
+                            
+                        # proceed with execution or terminate task/worker
                         if runner_action == "proceed":  pass
                         elif runner_action == "defer":  return False
                         elif runner_action == "terminate":  return True # pretend worker has finished                        
@@ -177,7 +182,7 @@ class WorkerHandler(webapp.RequestHandler):
                  - defer - runner shall finish after delegating worker to next task
                  - terminate -runner shall terminate completely
         '''
-        if not api_name:    return None, "proceed"
+        if not api_name:    return self.NULL, "proceed"
         api_name = api_name.lower()
         
         if api_name == 'sleep':
@@ -185,14 +190,26 @@ class WorkerHandler(webapp.RequestHandler):
             if secs < config.MIN_SLEEP_SECONDS:
                 logging.warning("[gae-workers] Worker %s (ID=%s) tried to sleep for % seconds -- that's too short",
                                 worker._name, worker._id, secs)
+                return False, "proceed"
             else:
                 self.save_worker_state(worker, lifetime = secs)
                 self.schedule_worker_execution(worker, delay = timedelta(seconds = secs))
-                return "terminate"  # we pretend worker has finished since we queue its next ask above
+                return self.NULL, "terminate"  # we pretend worker has finished since we queue its next ask above
+        
+        elif api_name == 'get_messages':
+            mc_key = _WORKER_MESSAGES_MEMCACHE_KEY % {'id':id}
+            msg_queue = memcache.get(mc_key, namespace = config.MEMCACHE_NAMESPACE) #@UndefinedVariable
+            if not msg_queue:   return None, "proceed"
+            
+            if not memcache.delete(mc_key, namespace = config.MEMCACHE_NAMESPACE): #@UndefinedVariable
+                logging.warning('[gae-workers] Could not clear message queue for worker %s (ID=%s)',
+                                worker._name, worker._id)
+            return msg_queue, "proceed"
+            
         else:
             logging.error("[gae-workers] Unknown API call: %s", api_name)
             
-        return None, "proceed"
+        return self.NULL, "proceed"
     
                 
     def save_worker_state(self, worker, lifetime = None):
@@ -214,7 +231,7 @@ class WorkerHandler(webapp.RequestHandler):
             except data.DataError, e:
                 logging.error("[gae-workers] Error while saving %s: %s", attr, e)
             
-        mc_key = _WORKER_MEMCACHE_KEY % {'id': worker._id}
+        mc_key = _WORKER_STATE_MEMCACHE_KEY % {'id': worker._id}
         if not memcache.set(mc_key, state, lifetime, namespace = config.MEMCACHE_NAMESPACE): #@UndefinedVariable
             logging.error("[gae-workers] Failed to save state for worker '%s' (ID=%s)",
                           worker._name, worker._id)
@@ -224,7 +241,7 @@ class WorkerHandler(webapp.RequestHandler):
         Loads the worker state from memcache if it was saved previously.
         @param worker: Worker object whose state is to be restored 
         '''
-        mc_key = _WORKER_MEMCACHE_KEY % {'id': worker._id}
+        mc_key = _WORKER_STATE_MEMCACHE_KEY % {'id': worker._id}
         state = memcache.get(mc_key, namespace = config.MEMCACHE_NAMESPACE) #@UndefinedVariable
         if state is None:
             worker._first_run = True

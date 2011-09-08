@@ -118,7 +118,7 @@ class WorkerHandler(webapp.RequestHandler):
                 if api_call:
                     try:
                         api_name, api_params = api_call
-                        api_result, runner_action = self.invoke_api(worker, api_name, *api_params)
+                        api_result, runner_action = self.invoke_worker_api(worker, api_name, *api_params)
                         
                         if api_result is not self.NULL:
                             worker.send(api_result)
@@ -171,7 +171,7 @@ class WorkerHandler(webapp.RequestHandler):
                       worker._name, worker._id)
         
         
-    def invoke_api(self, worker, api_name, *args):
+    def invoke_worker_api(self, worker, api_name, *args):
         '''
         Performs an "API" call which was requested by a worker via yielding.
         The exact action depends on the type of call.
@@ -182,7 +182,7 @@ class WorkerHandler(webapp.RequestHandler):
                  - defer - runner shall finish after delegating worker to next task
                  - terminate -runner shall terminate completely
         '''
-        if not api_name:    return self.NULL, "proceed"
+        if not api_name:    return (self.NULL, "proceed")
         api_name = api_name.lower()
         
         if api_name == 'sleep':
@@ -190,26 +190,26 @@ class WorkerHandler(webapp.RequestHandler):
             if secs < config.MIN_SLEEP_SECONDS:
                 logging.warning("[gae-workers] Worker %s (ID=%s) tried to sleep for % seconds -- that's too short",
                                 worker._name, worker._id, secs)
-                return False, "proceed"
+                return (False, "proceed")
             else:
                 self.save_worker_state(worker, lifetime = secs)
                 self.schedule_worker_execution(worker, delay = timedelta(seconds = secs))
-                return self.NULL, "terminate"  # we pretend worker has finished since we queue its next ask above
+                return (self.NULL, "terminate")  # we pretend worker has finished since we queue its next ask above
         
         elif api_name == 'get_messages':
             mc_key = _WORKER_MESSAGES_MEMCACHE_KEY % {'id':id}
             msg_queue = memcache.get(mc_key, namespace = config.MEMCACHE_NAMESPACE) #@UndefinedVariable
-            if not msg_queue:   return None, "proceed"
+            if not msg_queue:   return (None, "proceed")
             
             if not memcache.delete(mc_key, namespace = config.MEMCACHE_NAMESPACE): #@UndefinedVariable
                 logging.warning('[gae-workers] Could not clear message queue for worker %s (ID=%s)',
                                 worker._name, worker._id)
-            return msg_queue, "proceed"
+            return (msg_queue, "proceed")
             
         else:
             logging.error("[gae-workers] Unknown API call: %s", api_name)
             
-        return self.NULL, "proceed"
+        return (self.NULL, "proceed")
     
                 
     def save_worker_state(self, worker, lifetime = None):

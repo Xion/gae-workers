@@ -35,6 +35,7 @@ class Worker(object):
     
     # API "calls" available to workers
     SLEEP = lambda secs: ("sleep", (secs,))
+    FORK = lambda: ("fork", ())
     GET_MESSAGES = lambda: ("get_messages", ())
     
     def __init__(self, name = None, id = None):
@@ -65,6 +66,15 @@ class Worker(object):
         return Task(name = self._name or self._id,
                     url = task_url, method = 'GET', headers = headers,
                     eta = eta)
+        
+    def _get_state_dict(self):
+        '''
+        Retrieves the dictionary of worker attributes that consist of its state.
+        @return: Worker's state dictionary
+        '''
+        return dict((attr, value)
+                    for attr, value in self.__dict__.iteritems()
+                    if not attr.startswith('_'))
     
         
     def setup(self):

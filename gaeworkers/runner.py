@@ -195,6 +195,11 @@ class WorkerHandler(webapp.RequestHandler):
                 self.save_worker_state(worker, lifetime = secs)
                 self.schedule_worker_execution(worker, delay = timedelta(seconds = secs))
                 return (self.NULL, "terminate")  # we pretend worker has finished since we queue its next ask above
+            
+        elif api_name == 'fork':
+            child_worker = worker.__class__(name = worker.name)
+            child_worker.__dict__.update(worker._get_state_dict())
+            child_worker.start()
         
         elif api_name == 'get_messages':
             mc_key = _WORKER_MESSAGES_MEMCACHE_KEY % {'id':id}
@@ -224,7 +229,7 @@ class WorkerHandler(webapp.RequestHandler):
         
         # dump worker state into dictionary
         state = {}
-        for attr, value in worker.__dict__.iteritems():
+        for attr, value in worker._get_state_dict():
             if attr.startswith('_'):    continue
             try:
                 state[attr] = data.save_value(value)

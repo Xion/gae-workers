@@ -44,7 +44,14 @@ class WorkerHandler(webapp.RequestHandler):
             logging.error('[gae-workers] No worker ID provided')
             return
         
-        # attempt to import the worker class
+        worker_class = self._import_worker_class(worker_class_name)
+        if worker_class:
+            self.execute_worker(worker_id, worker_class)
+        
+    def _import_worker_class(self, worker_class_name):
+        '''
+        Attempts to import worker class. Handles errors that may arise.
+        '''
         try:
             module_name, class_name = worker_class_name.rsplit('.', 1)
             worker_module = __import__(module_name, globals(), locals(), fromlist = [class_name])
@@ -57,11 +64,11 @@ class WorkerHandler(webapp.RequestHandler):
             return
         except AttributeError:
             logging.error('[gae-workers] Module %s does not contain worker class %s', module_name, class_name)
-            return    
-        logging.debug('[gae-workers] Worker class %s imported successfully', worker_class_name)
-    
-        self.execute_worker(worker_id, worker_class)
+            return
         
+        logging.debug('[gae-workers] Worker class %s imported successfully', worker_class_name)
+        return worker_class
+    
         
     def execute_worker(self, id, class_obj):
         '''
@@ -198,7 +205,7 @@ class WorkerHandler(webapp.RequestHandler):
             
         elif api_name == 'fork':
             child_worker = worker.__class__(name = worker.name)
-            child_worker.__dict__.update(worker._get_state_dict())
+            child_worker.__dict__.update(worker._get_state_dict())  # TODO: deep copy of worker state
             child_worker.start()
         
         elif api_name == 'get_messages':

@@ -2,8 +2,37 @@
 <html>
 	<head>
 		<title>Shell (gae-workers demo)</title>
+		<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.3/jquery.min.js"></script>
+		<script>
+			$(document).ready(function() {
+				$("#prompt").keydown(function(event) {
+					if (event.which == 13 && event.ctrlKey) {
+						execute($(this).val());
+						$(this).val("");
+					}
+				});
+			});
+			
+			function execute(input) {
+				$.post(location.href, input, function(resp) {
+					var $history = $("#history");
+					
+					var input = resp.input.split('\n');
+					for (var i = 0; i < input.length; ++i)
+						input[i] = (i > 0 ? "    " : "") + input[i];
+					input = input.join('\n');
+					
+					var historyLines = $history.val();
+					historyLines += ">>> " + input + '\n';
+					historyLines += resp.result + '\n';
+					$history.val(historyLines);
+				}, 'json');
+			}
+		</script>
 	</head>
 	<body>
-		
+		<textarea id="history" cols="{{ columns }}" rows="{{ history_rows }}" value="" readonly="true"></textarea><br/>
+		<textarea id="prompt" cols="{{ columns }}" rows="{{ prompt_rows }}"></textarea></br>
+		<small>Ctrl+Enter to run</small>
 	</body>
 </html>

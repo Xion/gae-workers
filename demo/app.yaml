@@ -1,0 +1,13 @@
+application: gae-workers-shell-demo
+version: demo
+runtime: python
+api_version: 1
+
+
+handlers:
+
+- url: /_ah/worker
+  script: ../gaeworkers/runner.py
+  
+- url: /.*
+  script: shell.py

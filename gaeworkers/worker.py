@@ -5,7 +5,7 @@ Created on 2011-08-31
 
 @author: Xion
 '''
-from . import config, data
+from gaeworkers import config, data
 from google.appengine.api import memcache
 from google.appengine.api.taskqueue import Task
 import hashlib
@@ -34,9 +34,9 @@ class Worker(object):
     queue_name = config.QUEUE_NAME
     
     # API "calls" available to workers
-    SLEEP = lambda secs: ("sleep", (secs,))
-    FORK = lambda: ("fork", ())
-    GET_MESSAGES = lambda: ("get_messages", ())
+    SLEEP = staticmethod(lambda secs: ("sleep", (secs,)))
+    FORK = staticmethod(lambda: ("fork", ()))
+    GET_MESSAGES = staticmethod(lambda: ("get_messages", ()))
     
     def __init__(self, name = None, id = None):
         '''
@@ -135,6 +135,6 @@ def _generate_worker_id():
     and return a hex string.
     '''
     random_uuid = uuid.uuid4().bytes
-    id = hashlib.md5(random_uuid)
+    id = hashlib.md5(random_uuid).hexdigest()
     return id
     

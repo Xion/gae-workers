@@ -23,7 +23,7 @@ SAFETY_MARGIN = 5
 # Name of the taskqueue where worker tasks are being put in.
 # You can use it to customize the processing rate and/or other params in queue.yaml.
 # You don't generally need to change it.
-QUEUE_NAME = '__gae-workers'
+QUEUE_NAME = 'gae-workers'
 
 # A total amount of seconds request is allowed to be ran on App Engine.
 # Currently, it is 10 minutes.

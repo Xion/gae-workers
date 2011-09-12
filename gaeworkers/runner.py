@@ -7,14 +7,14 @@ Created on 2011-08-31
 
 @author: xion
 '''
-from . import config, data
+from gaeworkers import config, data
+from gaeworkers.worker import _TASK_HEADER_INVOCATION, _WORKER_MESSAGES_MEMCACHE_KEY
 from datetime import datetime, timedelta
 from google.appengine.api import memcache
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import run_wsgi_app
 from google.appengine.runtime import DeadlineExceededError
 from time import time
-from worker import _TASK_HEADER_INVOCATION, _WORKER_MESSAGES_MEMCACHE_KEY
 import inspect
 import logging
 
@@ -128,7 +128,7 @@ class WorkerHandler(webapp.RequestHandler):
                         api_result, runner_action = self.invoke_worker_api(worker, api_name, *api_params)
                         
                         if api_result is not self.NULL:
-                            worker.send(api_result)
+                            worker_run.send(api_result)
                             
                         # proceed with execution or terminate task/worker
                         if runner_action == "proceed":  pass

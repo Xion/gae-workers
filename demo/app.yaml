@@ -1,6 +1,7 @@
 application: gae-workers-shell-demo
 version: demo
-runtime: python
+runtime: python2.7
+threadsafe: true
 api_version: 1
 
 

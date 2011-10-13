@@ -6,9 +6,8 @@ If you want to use it, proceed with caution. The actual functionality provided b
 hardly resemble assumptions stated in this documentation.
 In other words: stuff is being made here. Help, if you can, but don't cry if something breaks.
 
-*Note*: Until App Engine starts supporting Python 2.7 (which will happen at late November 2011),
-this library can be only considered an experiment since it will not work outside of development server.
-Once GAE supports Python 2.6+, this should change.
+*Note*: This library is to be used with Python 2.7 runtime which is currently in experimental
+state when it comes to its support on Google App Engine.
 
 
 Overview

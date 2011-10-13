@@ -6,8 +6,8 @@ Created on 2011-09-12
 @author: xion
 '''
 from demo.shell_worker import ShellWorker
-from django.utils import simplejson as json
 from google.appengine.api import memcache
+import json
 import webapp2
 import os
 import time
@@ -29,8 +29,8 @@ class ShellRequestHandler(webapp2.RequestHandler):
         """
         POST handler invoked by AJAX call.
         """
-        input = self.request.get('input')
-        if not input:
+        shell_input = self.request.get('input')
+        if not shell_input:
             self.respond_with("")
             return
         worker_id = self.request.get('id')
@@ -39,7 +39,7 @@ class ShellRequestHandler(webapp2.RequestHandler):
             return
         
         shell_worker = ShellWorker(id = worker_id)
-        shell_worker.post_message(input)
+        shell_worker.post_message(shell_input)
         
         result, has_result = self.__try_to_obtain_result()
         result = result if has_result else "<Failed to evaluate input>"

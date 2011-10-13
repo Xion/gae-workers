@@ -11,17 +11,16 @@ from gaeworkers import config, data
 from gaeworkers.worker import _TASK_HEADER_INVOCATION, _WORKER_MESSAGES_MEMCACHE_KEY
 from datetime import datetime, timedelta
 from google.appengine.api import memcache
-from google.appengine.ext import webapp
-from google.appengine.ext.webapp.util import run_wsgi_app
 from google.appengine.runtime import DeadlineExceededError
 from time import time
+import webapp2
 import inspect
 import logging
 
 
 _WORKER_STATE_MEMCACHE_KEY = "worker://%(id)s/state"
 
-class WorkerHandler(webapp.RequestHandler):
+class WorkerHandler(webapp2.RequestHandler):
     '''
     Request handler for workers. It is invoked by the GAE taskqueue
     and controls the execution of a single worker, preserving and
@@ -70,14 +69,14 @@ class WorkerHandler(webapp.RequestHandler):
         return worker_class
     
         
-    def execute_worker(self, id, class_obj):
+    def execute_worker(self, worker_id, class_obj):
         '''
         Commences execution of given worker.
         @param id: ID of the worker; used to obtain worker state (if any)
         @param class_obj: Worker class
         '''
         worker_name = self.request.headers['X-AppEngine-TaskName']
-        worker = class_obj(worker_name, id)
+        worker = class_obj(worker_name, worker_id)
         
         self.restore_worker_state(worker)
         if not worker._first_run:
@@ -109,6 +108,7 @@ class WorkerHandler(webapp.RequestHandler):
         @return: Whether worker's execution shall be continued
         '''
         worker_run = worker.run()
+        api_result = self.NULL
         finished = False
         
         # initialize measurement/statistical variables
@@ -120,15 +120,14 @@ class WorkerHandler(webapp.RequestHandler):
         current_time = time()
         while estimated_time_left > 0:
             try:
-                # invoke the next iteration and see whether it ended with an "API" call
-                api_call = worker_run.next()
+                # proceed with next iteration and see whether the worker wants to call our "API"
+                api_call = worker_run.next() \
+                            if api_result is self.NULL \
+                            else worker_run.send(api_result) 
                 if api_call:
                     try:
                         api_name, api_params = api_call
                         api_result, runner_action = self.invoke_worker_api(worker, api_name, *api_params)
-                        
-                        if api_result is not self.NULL:
-                            worker_run.send(api_result)
                             
                         # proceed with execution or terminate task/worker
                         if runner_action == "proceed":  pass
@@ -236,8 +235,7 @@ class WorkerHandler(webapp.RequestHandler):
         
         # dump worker state into dictionary
         state = {}
-        for attr, value in worker._get_state_dict():
-            if attr.startswith('_'):    continue
+        for attr, value in worker._get_state_dict().iteritems():
             try:
                 state[attr] = data.save_value(value)
             except data.DataError, e:
@@ -268,10 +266,5 @@ class WorkerHandler(webapp.RequestHandler):
                 
         worker._first_run = False
         
-        
-        
-if __name__ == '__main__':
-    worker_app = webapp.WSGIApplication([
-                                         (config.WORKER_URL, WorkerHandler),
-                                        ])
-    run_wsgi_app(worker_app)
+          
+app = webapp2.WSGIApplication([ (config.WORKER_URL, WorkerHandler) ])

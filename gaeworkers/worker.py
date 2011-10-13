@@ -17,6 +17,7 @@ import uuid
 class InvalidWorkerState(Exception):
     ''' Exception signaling invalid worker state for requested operation. '''
     def __init__(self, msg):
+        super(InvalidWorkerState, self).__init__(msg)
         self.msg = msg
     def __str__(self):
         return self.msg
@@ -38,13 +39,13 @@ class Worker(object):
     FORK = staticmethod(lambda: ("fork", ()))
     GET_MESSAGES = staticmethod(lambda: ("get_messages", ()))
     
-    def __init__(self, name = None, id = None):
+    def __init__(self, worker_name = None, worker_id = None):
         '''
         Constructor. In most cases it doesn't need to be overidden.
         If it is, super() shall be called.
         '''
-        self._name = name
-        self._id = id
+        self._name = worker_name
+        self._id = worker_id
         
     def _create_task(self, invocation = 1, eta = None):
         '''
@@ -83,7 +84,7 @@ class Worker(object):
         This method is invoked by gae-workers task handler 
         at the beginning of worker's execution.
         '''
-        logging.info('[gae-workers] %s initialized' % self.__class__.__name__)
+        logging.info('[gae-workers] %s initialized', self.__class__.__name__)
         
     def run(self):
         '''
@@ -113,10 +114,11 @@ class Worker(object):
                     although simple Python types are recommended.
         @return: Whether the message was posted (this doesn't mean it was processed!)
         '''
-        id = getattr(self, '_id', None)
-        if not id:  raise InvalidWorkerState('Worker object has not been initialized')
+        worker_id = getattr(self, '_id', None)
+        if not worker_id:
+            raise InvalidWorkerState('Worker object has not been initialized')
         
-        mc_key = _WORKER_MESSAGES_MEMCACHE_KEY % {'id':id}
+        mc_key = _WORKER_MESSAGES_MEMCACHE_KEY % {'id':worker_id}
         msg_queue = memcache.get(mc_key, namespace = config.MEMCACHE_NAMESPACE) #@UndefinedVariable
         msg_queue = msg_queue or []
         
@@ -135,6 +137,6 @@ def _generate_worker_id():
     and return a hex string.
     '''
     random_uuid = uuid.uuid4().bytes
-    id = hashlib.md5(random_uuid).hexdigest()
-    return id
+    worker_id = hashlib.md5(random_uuid).hexdigest()
+    return worker_id
     

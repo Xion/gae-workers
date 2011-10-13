@@ -1,8 +1,13 @@
 application: gae-workers-shell-demo
 version: demo
-runtime: python2.7
+runtime: python27
 threadsafe: true
 api_version: 1
+
+
+libraries:
+- name: jinja2
+  version: latest
 
 
 handlers:
@@ -11,4 +16,4 @@ handlers:
   script: ../gaeworkers/runner.py
   
 - url: /.*
-  script: shell.py
+  script: shell.app

@@ -7,7 +7,8 @@ hardly resemble assumptions stated in this documentation.
 In other words: stuff is being made here. Help, if you can, but don't cry if something breaks.
 
 *Note*: This library is to be used with Python 2.7 runtime which is currently in experimental
-state when it comes to its support on Google App Engine.
+state when it comes to its support on Google App Engine. As of now, for example, there is no
+way to test the multithreading on local dev server which kinda makes *gae-workers* untestable locally.
 
 
 Overview

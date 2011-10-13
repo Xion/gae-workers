@@ -4,6 +4,8 @@
 		<title>Shell (gae-workers demo)</title>
 		<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.3/jquery.min.js"></script>
 		<script>
+			var WORKER_ID = "{{ worker_id }}";
+			
 			$(document).ready(function() {
 				$("#prompt").keydown(function(event) {
 					if (event.which == 13 && event.ctrlKey) {
@@ -14,7 +16,8 @@
 			});
 			
 			function execute(input) {
-				$.post(location.href, input, function(resp) {
+				var request = { 'id': WORKER_ID, 'input': input };
+				$.post(location.href, request, function(resp) {
 					var $history = $("#history");
 					
 					var input = resp.input.split('\n');

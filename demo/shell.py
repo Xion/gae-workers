@@ -18,7 +18,7 @@ jinja_env = jinja2.Environment(loader = jinja2.FileSystemLoader(os.path.dirname(
 
 class ShellRequestHandler(webapp2.RequestHandler):
     
-    TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), 'shell.djhtml')
+    TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), 'shell.jhtml')
     
     def get(self):
         worker = ShellWorker()

@@ -24,9 +24,10 @@ to *app.yaml* that will make workers' tasks go to the *runner.py* script intende
 
     handlers:
     - url: /_ah/worker
-      script: gaeworkers/runner.py
+      script: gaeworkers/runner.app
 
-If you want, you can change the URL (among other parameters) by editing the *config.py* file. 
+If you want, you can change the URL (among other parameters) by editing the *config.py* file.
+(and, of course, changing in *app.yaml* as well).
 
 
 Usage

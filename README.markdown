@@ -38,15 +38,15 @@ In general, you define a class inheriting from <code>gaeworkers.Worker</code> an
 its <code>run()</code> method to do your logic:
 
 ```python
-    from gaeworkers import Worker
-    # ...
-    class MyWorker(Worker):
-        def setup():
-            self.query = Model.all()
-        def run():
-            for model in self.query:
-                do_something(model)
-                yield
+from gaeworkers import Worker
+# ...
+class MyWorker(Worker):
+    def setup():
+        self.query = Model.all()
+    def run():
+        for model in self.query:
+            do_something(model)
+            yield
 ```
 There are few things to bear in mind though:
 
@@ -64,8 +64,8 @@ There are few things to bear in mind though:
 Starting a worker is straightforward:
 
 ```python
-    worker = MyWorker(name='Model worker')
-    worker.start()
+worker = MyWorker(name='Model worker')
+worker.start()
 ```
 Assigning a <code>name</code> allows for easily distinguishing tasks belonging to different workers in App Engine
 logs and/or Appstats. The name is included in the query string worker's task URL, and is used as a name for the task.

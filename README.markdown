@@ -6,9 +6,7 @@ If you want to use it, proceed with caution. The actual functionality provided b
 hardly resemble assumptions stated in this documentation.
 In other words: stuff is being made here. Help, if you can, but don't cry if something breaks.
 
-*Note*: This library is to be used with Python 2.7 runtime which is currently in experimental
-state when it comes to its support on Google App Engine. As of now, for example, there is no
-way to test the multithreading on local dev server which kinda makes *gae-workers* untestable locally.
+*Note*: This library is to be used with Python 2.7 runtime on GAE.
 
 
 Overview
@@ -39,6 +37,7 @@ Using a worker is quite similar to working with the Python standard <code>thread
 In general, you define a class inheriting from <code>gaeworkers.Worker</code> and implement
 its <code>run()</code> method to do your logic:
 
+```python
     from gaeworkers import Worker
     # ...
     class MyWorker(Worker):
@@ -48,7 +47,7 @@ its <code>run()</code> method to do your logic:
             for model in self.query:
                 do_something(model)
                 yield
-
+```
 There are few things to bear in mind though:
 
   * For best results, the <code>run()</code> method shall be a generator function that uses <code>yield</code>
@@ -60,12 +59,13 @@ There are few things to bear in mind though:
     non-volatile data shall be stored in <code>self</code>'s attributes.
   * <code>run()</code> is invoked "from the beginning" for every task spawned to handle the worker. Hence it is
     not a good place to have any sort of initialization. For that, implement the <code>setup()</code> method - it is
-    ran only once at the beginning.
+    ran only once per worker.
 
 Starting a worker is straightforward:
 
+```python
     worker = MyWorker(name='Model worker')
     worker.start()
-
+```
 Assigning a <code>name</code> allows for easily distinguishing tasks belonging to different workers in App Engine
 logs and/or Appstats. The name is included in the query string worker's task URL, and is used as a name for the task.
